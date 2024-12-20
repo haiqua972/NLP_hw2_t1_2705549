@@ -92,19 +92,54 @@ trainer_orig = Trainer(
 trainer_orig.train()
 
 
-#5. Zero-Shot Inference and Comparative Analysis
+#5. Zero-Shot Inference and Evaluation Function
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from transformers import pipeline
+
 zero_shot_classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
+
 sample_texts_en = test_data['text_en'].dropna().sample(2).tolist()
 sample_texts_orig = test_data['text'].dropna().sample(2).tolist()
 
 predictions_en = zero_shot_classifier(sample_texts_en, candidate_labels=["left", "right"])
 predictions_orig = zero_shot_classifier(sample_texts_orig, candidate_labels=["left", "right"])
 print("Zero-shot classification results for English text:", predictions_en)
-print("Zero-shot classification results for original language text:", predictions_orig)
+print("Zero-shot classification results for Original language text:", predictions_orig)
+
+def evaluate_zero_shot_batch(model, texts, true_labels, candidate_labels):
+    
+    texts = texts.dropna().tolist()
+    true_labels = true_labels[:len(texts)]  
+    
+    batch_predictions = model(texts, candidate_labels=candidate_labels, batch_size=16)
+    preds = [0 if pred['labels'][0] == "left" else 1 for pred in batch_predictions]
+
+    acc = accuracy_score(true_labels, preds)
+    precision, recall, f1, _ = precision_recall_fscore_support(true_labels, preds, average='binary')
+    return {
+        'accuracy': acc,
+        'f1': f1,
+        'precision': precision,
+        'recall': recall
+    }
+
+
+zero_shot_results_en = evaluate_zero_shot_batch(
+    zero_shot_classifier, test_data['text_en'], test_data['label'], ["left", "right"]
+)
+
+zero_shot_results_orig = evaluate_zero_shot_batch(
+    zero_shot_classifier, test_data['text'], test_data['label'], ["left", "right"]
+)
+
+print("Zero-shot evaluation results for English text:", zero_shot_results_en)
+print("Zero-shot evaluation results for Original language text:", zero_shot_results_orig)
+
 eval_results_en = trainer_en.evaluate()
 eval_results_orig = trainer_orig.evaluate()
 
-print("Evaluation results for English model:", eval_results_en)
-print("Evaluation results for Original Language model:", eval_results_orig)
+print("Evaluation results for Fine-tuned English model:", eval_results_en)
+print("Evaluation results for Fine-tuned Original language model:", eval_results_orig)
+
 
 
